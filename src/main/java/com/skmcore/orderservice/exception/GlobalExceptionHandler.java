@@ -88,8 +88,12 @@ public class GlobalExceptionHandler {
     }
 
     private String correlationId(HttpServletRequest request) {
-        String id = request.getHeader(HEADER_CORRELATION_ID);
-        return (id != null && !id.isBlank()) ? id : UUID.randomUUID().toString();
+        String fromMdc = MDC.get(MDC_CORRELATION_ID);
+        if (fromMdc != null && !fromMdc.isBlank()) {
+            return fromMdc;
+        }
+        String fromHeader = request.getHeader(HEADER_CORRELATION_ID);
+        return (fromHeader != null && !fromHeader.isBlank()) ? fromHeader : UUID.randomUUID().toString();
     }
 
     private void withMdc(String cid, Runnable action) {
