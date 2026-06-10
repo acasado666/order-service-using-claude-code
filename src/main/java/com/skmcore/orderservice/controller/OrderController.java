@@ -56,7 +56,7 @@ public class OrderController {
     @GetMapping("/customer/{customerId}")
     @Operation(summary = "List orders by customer ID")
     public ResponseEntity<Page<OrderResponse>> getOrdersByCustomer(
-            @PathVariable String customerId,
+            @PathVariable UUID customerId,
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(orderService.getOrdersByCustomer(customerId, pageable));
     }

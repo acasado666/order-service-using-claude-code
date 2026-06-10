@@ -1,11 +1,9 @@
 package com.skmcore.orderservice.model;
 
 public enum OrderStatus {
-    PENDING,
+    CREATED,
     CONFIRMED,
-    PROCESSING,
     SHIPPED,
     DELIVERED,
-    CANCELLED,
-    REFUNDED
+    CANCELLED
 }

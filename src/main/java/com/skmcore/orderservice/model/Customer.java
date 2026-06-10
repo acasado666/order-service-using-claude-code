@@ -2,63 +2,59 @@ package com.skmcore.orderservice.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
-import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "order_items")
+@Table(name = "customers")
+@EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-public class OrderItem {
+public class Customer {
 
     @Id
     @EqualsAndHashCode.Include
     @Column(updatable = false, nullable = false)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_id", nullable = false)
-    private Order order;
+    @Column(unique = true, nullable = false)
+    private String email;
 
     @Column(nullable = false)
-    private String productId;
+    private String fullName;
 
+    private String phone;
+
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @LastModifiedDate
     @Column(nullable = false)
-    private String productName;
-
-    @Positive
-    @Column(nullable = false)
-    private int quantity;
-
-    @Column(nullable = false, precision = 10, scale = 2)
-    private BigDecimal unitPrice;
-
-    @Column(nullable = false, precision = 12, scale = 2)
-    private BigDecimal subtotal;
+    private LocalDateTime updatedAt;
 
     @PrePersist
     private void prePersist() {
         if (id == null) {
             id = UUID.randomUUID();
         }
-        subtotal = unitPrice.multiply(BigDecimal.valueOf(quantity));
     }
 }

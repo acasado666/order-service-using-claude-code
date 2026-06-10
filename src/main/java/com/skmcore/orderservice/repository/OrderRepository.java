@@ -13,11 +13,11 @@ import java.util.UUID;
 
 public interface OrderRepository extends JpaRepository<Order, UUID> {
 
-    Page<Order> findByCustomerId(String customerId, Pageable pageable);
+    Page<Order> findByCustomerId(UUID customerId, Pageable pageable);
 
     Page<Order> findByStatus(OrderStatus status, Pageable pageable);
 
-    @Query("SELECT o FROM Order o WHERE o.customerId = :customerId AND o.status = :status")
-    List<Order> findByCustomerIdAndStatus(@Param("customerId") String customerId,
+    @Query("SELECT o FROM Order o WHERE o.customer.id = :customerId AND o.status = :status")
+    List<Order> findByCustomerIdAndStatus(@Param("customerId") UUID customerId,
                                           @Param("status") OrderStatus status);
 }

@@ -16,7 +16,7 @@ public interface OrderService {
 
     Page<OrderResponse> getAllOrders(Pageable pageable);
 
-    Page<OrderResponse> getOrdersByCustomer(String customerId, Pageable pageable);
+    Page<OrderResponse> getOrdersByCustomer(UUID customerId, Pageable pageable);
 
     OrderResponse updateOrderStatus(UUID id, OrderStatus newStatus);
 
