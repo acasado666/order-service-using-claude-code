@@ -11,11 +11,11 @@ public record CreateOrderRequest(
         @NotNull(message = "Customer ID is required")
         UUID customerId,
 
-        @NotNull(message = "Shipping address is required")
-        @Valid
-        ShippingAddressDto shippingAddress,
-
         @NotEmpty(message = "Order must contain at least one item")
         @Valid
-        List<OrderItemRequest> items
+        List<OrderItemRequest> items,
+
+        @NotNull(message = "Shipping address is required")
+        @Valid
+        AddressRequest shippingAddress
 ) {}

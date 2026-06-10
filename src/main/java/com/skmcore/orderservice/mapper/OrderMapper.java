@@ -1,15 +1,17 @@
 package com.skmcore.orderservice.mapper;
 
+import com.skmcore.orderservice.dto.AddressRequest;
 import com.skmcore.orderservice.dto.CreateOrderRequest;
 import com.skmcore.orderservice.dto.OrderItemRequest;
 import com.skmcore.orderservice.dto.OrderItemResponse;
 import com.skmcore.orderservice.dto.OrderResponse;
-import com.skmcore.orderservice.dto.ShippingAddressDto;
 import com.skmcore.orderservice.model.Order;
 import com.skmcore.orderservice.model.OrderItem;
 import com.skmcore.orderservice.model.ShippingAddress;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+
+import java.util.List;
 
 @Mapper(componentModel = "spring")
 public interface OrderMapper {
@@ -29,12 +31,15 @@ public interface OrderMapper {
     @Mapping(target = "subtotal", ignore = true)
     OrderItem toItemEntity(OrderItemRequest request);
 
-    @Mapping(target = "customerId", source = "customer.id")
+    @Mapping(target = "customerEmail", source = "customer.email")
+    @Mapping(target = "customerName", source = "customer.fullName")
     OrderResponse toResponse(Order order);
+
+    List<OrderItemResponse> toItemResponseList(List<OrderItem> items);
 
     OrderItemResponse toItemResponse(OrderItem item);
 
-    ShippingAddressDto toAddressDto(ShippingAddress address);
+    ShippingAddress toShippingAddress(AddressRequest dto);
 
-    ShippingAddress toAddress(ShippingAddressDto dto);
+    AddressRequest toAddressRequest(ShippingAddress address);
 }

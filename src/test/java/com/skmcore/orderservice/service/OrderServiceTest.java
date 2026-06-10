@@ -1,12 +1,15 @@
 package com.skmcore.orderservice.service;
 
+import com.skmcore.orderservice.dto.AddressRequest;
 import com.skmcore.orderservice.dto.CreateOrderRequest;
 import com.skmcore.orderservice.dto.OrderItemRequest;
 import com.skmcore.orderservice.dto.OrderResponse;
 import com.skmcore.orderservice.exception.EntityNotFoundException;
 import com.skmcore.orderservice.mapper.OrderMapper;
+import com.skmcore.orderservice.model.Customer;
 import com.skmcore.orderservice.model.Order;
 import com.skmcore.orderservice.model.OrderStatus;
+import com.skmcore.orderservice.repository.CustomerRepository;
 import com.skmcore.orderservice.repository.OrderRepository;
 import com.skmcore.orderservice.service.impl.OrderServiceImpl;
 import org.junit.jupiter.api.Test;
@@ -35,6 +38,9 @@ class OrderServiceTest {
     private OrderRepository orderRepository;
 
     @Mock
+    private CustomerRepository customerRepository;
+
+    @Mock
     private OrderMapper orderMapper;
 
     @InjectMocks
@@ -42,13 +48,14 @@ class OrderServiceTest {
 
     @Test
     void createOrder_validRequest_savesAndReturnsResponse() {
-        CreateOrderRequest request = new CreateOrderRequest("cust-1", List.of(
-                new OrderItemRequest("prod-1", "Widget", 2, new BigDecimal("9.99"))
-        ));
-        Order order = buildOrder(OrderStatus.PENDING);
+        UUID customerId = UUID.randomUUID();
+        Customer customer = buildCustomer(customerId);
+        CreateOrderRequest request = buildRequest(customerId);
+        Order order = buildOrder(OrderStatus.CREATED, customer);
         order.setItems(new ArrayList<>());
         OrderResponse expected = buildResponse(order);
 
+        when(customerRepository.findById(customerId)).thenReturn(Optional.of(customer));
         when(orderMapper.toEntity(request)).thenReturn(order);
         when(orderRepository.save(order)).thenReturn(order);
         when(orderMapper.toResponse(order)).thenReturn(expected);
@@ -60,9 +67,19 @@ class OrderServiceTest {
     }
 
     @Test
+    void createOrder_unknownCustomer_throwsEntityNotFoundException() {
+        UUID customerId = UUID.randomUUID();
+        when(customerRepository.findById(customerId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> orderService.createOrder(buildRequest(customerId)))
+                .isInstanceOf(EntityNotFoundException.class)
+                .hasMessageContaining(customerId.toString());
+    }
+
+    @Test
     void getOrderById_existingId_returnsResponse() {
         UUID id = UUID.randomUUID();
-        Order order = buildOrder(OrderStatus.PENDING);
+        Order order = buildOrder(OrderStatus.CREATED, buildCustomer(UUID.randomUUID()));
         OrderResponse expected = buildResponse(order);
 
         when(orderRepository.findById(id)).thenReturn(Optional.of(order));
@@ -84,9 +101,9 @@ class OrderServiceTest {
     }
 
     @Test
-    void cancelOrder_pendingOrder_setsStatusCancelled() {
+    void cancelOrder_createdOrder_setsStatusCancelled() {
         UUID id = UUID.randomUUID();
-        Order order = buildOrder(OrderStatus.PENDING);
+        Order order = buildOrder(OrderStatus.CREATED, buildCustomer(UUID.randomUUID()));
 
         when(orderRepository.findById(id)).thenReturn(Optional.of(order));
         when(orderRepository.save(any(Order.class))).thenReturn(order);
@@ -107,9 +124,9 @@ class OrderServiceTest {
     }
 
     @Test
-    void updateOrderStatus_pendingToConfirmed_returnsUpdatedResponse() {
+    void updateOrderStatus_createdToConfirmed_returnsUpdatedResponse() {
         UUID id = UUID.randomUUID();
-        Order order = buildOrder(OrderStatus.PENDING);
+        Order order = buildOrder(OrderStatus.CREATED, buildCustomer(UUID.randomUUID()));
         OrderResponse expected = buildResponse(order);
 
         when(orderRepository.findById(id)).thenReturn(Optional.of(order));
@@ -122,11 +139,27 @@ class OrderServiceTest {
         assertThat(result).isEqualTo(expected);
     }
 
-    private Order buildOrder(OrderStatus status) {
+    private Customer buildCustomer(UUID id) {
+        return Customer.builder()
+                .id(id)
+                .email("test@example.com")
+                .fullName("Test User")
+                .build();
+    }
+
+    private CreateOrderRequest buildRequest(UUID customerId) {
+        return new CreateOrderRequest(
+                customerId,
+                List.of(new OrderItemRequest("prod-1", "Widget", 2, new BigDecimal("9.99"))),
+                new AddressRequest("123 Main St", "Springfield", "IL", "62701", "US")
+        );
+    }
+
+    private Order buildOrder(OrderStatus status, Customer customer) {
         return Order.builder()
                 .id(UUID.randomUUID())
-                .customerId("cust-1")
                 .status(status)
+                .customer(customer)
                 .totalAmount(new BigDecimal("19.98"))
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
@@ -136,10 +169,13 @@ class OrderServiceTest {
     private OrderResponse buildResponse(Order order) {
         return new OrderResponse(
                 order.getId(),
-                order.getCustomerId(),
+                "ORD-ABC12345",
                 order.getStatus(),
-                order.getTotalAmount(),
+                order.getCustomer().getEmail(),
+                order.getCustomer().getFullName(),
                 List.of(),
+                new AddressRequest("123 Main St", "Springfield", "IL", "62701", "US"),
+                order.getTotalAmount(),
                 order.getCreatedAt(),
                 order.getUpdatedAt()
         );
