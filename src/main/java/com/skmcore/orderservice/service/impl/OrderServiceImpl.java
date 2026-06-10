@@ -2,6 +2,9 @@ package com.skmcore.orderservice.service.impl;
 
 import com.skmcore.orderservice.dto.CreateOrderRequest;
 import com.skmcore.orderservice.dto.OrderResponse;
+import com.skmcore.orderservice.dto.PagedResponse;
+import com.skmcore.orderservice.event.OrderCreatedEvent;
+import com.skmcore.orderservice.event.OrderStatusChangedEvent;
 import com.skmcore.orderservice.exception.EntityNotFoundException;
 import com.skmcore.orderservice.mapper.OrderMapper;
 import com.skmcore.orderservice.model.Customer;
@@ -9,10 +12,13 @@ import com.skmcore.orderservice.model.Order;
 import com.skmcore.orderservice.model.OrderStatus;
 import com.skmcore.orderservice.repository.CustomerRepository;
 import com.skmcore.orderservice.repository.OrderRepository;
+import com.skmcore.orderservice.repository.OrderSpecification;
 import com.skmcore.orderservice.service.OrderService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
@@ -28,13 +34,16 @@ public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final CustomerRepository customerRepository;
     private final OrderMapper orderMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     public OrderServiceImpl(OrderRepository orderRepository,
                             CustomerRepository customerRepository,
-                            OrderMapper orderMapper) {
+                            OrderMapper orderMapper,
+                            ApplicationEventPublisher eventPublisher) {
         this.orderRepository = orderRepository;
         this.customerRepository = customerRepository;
         this.orderMapper = orderMapper;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -50,48 +59,53 @@ public class OrderServiceImpl implements OrderService {
 
         Order saved = orderRepository.save(order);
         log.info("Order created: {}", saved.getOrderNumber());
+
+        eventPublisher.publishEvent(new OrderCreatedEvent(saved));
         return orderMapper.toResponse(saved);
     }
 
     @Override
     @Transactional(readOnly = true)
     @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 500))
-    public OrderResponse getOrderByOrderNumber(String orderNumber) {
-        return orderRepository.findByOrderNumber(orderNumber)
+    public OrderResponse getOrderByNumber(String orderNumber) {
+        return orderRepository.findByOrderNumberWithItems(orderNumber)
                 .map(orderMapper::toResponse)
                 .orElseThrow(() -> new EntityNotFoundException("Order", orderNumber));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Page<OrderResponse> getOrders(OrderStatus status, UUID customerId, Pageable pageable) {
-        Page<Order> page;
-        if (status != null && customerId != null) {
-            page = orderRepository.findByStatusAndCustomer_Id(status, customerId, pageable);
-        } else if (status != null) {
-            page = orderRepository.findByStatus(status, pageable);
-        } else if (customerId != null) {
-            page = orderRepository.findByCustomer_Id(customerId, pageable);
-        } else {
-            page = orderRepository.findAll(pageable);
-        }
-        return page.map(orderMapper::toResponse);
+    public PagedResponse<OrderResponse> listOrders(UUID customerId, OrderStatus status, Pageable pageable) {
+        Specification<Order> spec = Specification
+                .where(OrderSpecification.hasCustomerId(customerId))
+                .and(OrderSpecification.hasStatus(status));
+
+        Page<OrderResponse> page = orderRepository.findAll(spec, pageable).map(orderMapper::toResponse);
+        return new PagedResponse<>(
+                page.getContent(),
+                page.getNumber(),
+                page.getSize(),
+                page.getTotalElements(),
+                page.getTotalPages()
+        );
     }
 
     @Override
     public OrderResponse updateOrderStatus(String orderNumber, OrderStatus newStatus) {
         log.info("Updating order {} to status {}", orderNumber, newStatus);
         Order order = findByOrderNumberOrThrow(orderNumber);
+
+        OrderStatus previousStatus = order.getStatus();
         order.transitionTo(newStatus);
-        return orderMapper.toResponse(orderRepository.save(order));
+        Order saved = orderRepository.save(order);
+
+        eventPublisher.publishEvent(new OrderStatusChangedEvent(saved, previousStatus));
+        return orderMapper.toResponse(saved);
     }
 
     @Override
     public void cancelOrder(String orderNumber) {
-        log.info("Cancelling order: {}", orderNumber);
-        Order order = findByOrderNumberOrThrow(orderNumber);
-        order.transitionTo(OrderStatus.CANCELLED);
-        orderRepository.save(order);
+        updateOrderStatus(orderNumber, OrderStatus.CANCELLED);
     }
 
     private Order findByOrderNumberOrThrow(String orderNumber) {

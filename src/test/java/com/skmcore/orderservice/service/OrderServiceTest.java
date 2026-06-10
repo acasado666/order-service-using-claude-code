@@ -4,6 +4,7 @@ import com.skmcore.orderservice.dto.AddressRequest;
 import com.skmcore.orderservice.dto.CreateOrderRequest;
 import com.skmcore.orderservice.dto.OrderItemRequest;
 import com.skmcore.orderservice.dto.OrderResponse;
+import com.skmcore.orderservice.dto.PagedResponse;
 import com.skmcore.orderservice.exception.EntityNotFoundException;
 import com.skmcore.orderservice.mapper.OrderMapper;
 import com.skmcore.orderservice.model.Customer;
@@ -14,9 +15,14 @@ import com.skmcore.orderservice.repository.OrderRepository;
 import com.skmcore.orderservice.service.impl.OrderServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -36,20 +42,16 @@ class OrderServiceTest {
 
     private static final String ORDER_NUMBER = "ORD-ABC12345";
 
-    @Mock
-    private OrderRepository orderRepository;
-
-    @Mock
-    private CustomerRepository customerRepository;
-
-    @Mock
-    private OrderMapper orderMapper;
+    @Mock private OrderRepository orderRepository;
+    @Mock private CustomerRepository customerRepository;
+    @Mock private OrderMapper orderMapper;
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private OrderServiceImpl orderService;
 
     @Test
-    void createOrder_validRequest_savesAndReturnsResponse() {
+    void createOrder_validRequest_savesAndPublishesEvent() {
         UUID customerId = UUID.randomUUID();
         Customer customer = buildCustomer(customerId);
         CreateOrderRequest request = buildRequest(customerId);
@@ -66,6 +68,7 @@ class OrderServiceTest {
 
         assertThat(result).isEqualTo(expected);
         verify(orderRepository).save(order);
+        verify(eventPublisher).publishEvent(any());
     }
 
     @Test
@@ -79,50 +82,44 @@ class OrderServiceTest {
     }
 
     @Test
-    void getOrderByOrderNumber_existingNumber_returnsResponse() {
+    void getOrderByNumber_existingOrder_returnsResponse() {
         Order order = buildOrder(OrderStatus.CREATED, buildCustomer(UUID.randomUUID()));
         OrderResponse expected = buildResponse(order);
 
-        when(orderRepository.findByOrderNumber(ORDER_NUMBER)).thenReturn(Optional.of(order));
+        when(orderRepository.findByOrderNumberWithItems(ORDER_NUMBER)).thenReturn(Optional.of(order));
         when(orderMapper.toResponse(order)).thenReturn(expected);
 
-        OrderResponse result = orderService.getOrderByOrderNumber(ORDER_NUMBER);
-
-        assertThat(result).isEqualTo(expected);
+        assertThat(orderService.getOrderByNumber(ORDER_NUMBER)).isEqualTo(expected);
     }
 
     @Test
-    void getOrderByOrderNumber_unknownNumber_throwsEntityNotFoundException() {
-        when(orderRepository.findByOrderNumber(ORDER_NUMBER)).thenReturn(Optional.empty());
+    void getOrderByNumber_unknownOrder_throwsEntityNotFoundException() {
+        when(orderRepository.findByOrderNumberWithItems(ORDER_NUMBER)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> orderService.getOrderByOrderNumber(ORDER_NUMBER))
+        assertThatThrownBy(() -> orderService.getOrderByNumber(ORDER_NUMBER))
                 .isInstanceOf(EntityNotFoundException.class)
                 .hasMessageContaining(ORDER_NUMBER);
     }
 
     @Test
-    void cancelOrder_createdOrder_setsStatusCancelled() {
+    @SuppressWarnings("unchecked")
+    void listOrders_noFilters_returnsAllOrders() {
         Order order = buildOrder(OrderStatus.CREATED, buildCustomer(UUID.randomUUID()));
+        OrderResponse orderResponse = buildResponse(order);
+        var pageable = PageRequest.of(0, 20);
 
-        when(orderRepository.findByOrderNumber(ORDER_NUMBER)).thenReturn(Optional.of(order));
-        when(orderRepository.save(any(Order.class))).thenReturn(order);
+        when(orderRepository.findAll(any(Specification.class), any(PageRequest.class)))
+                .thenReturn(new PageImpl<>(List.of(order), pageable, 1));
+        when(orderMapper.toResponse(order)).thenReturn(orderResponse);
 
-        orderService.cancelOrder(ORDER_NUMBER);
+        PagedResponse<OrderResponse> result = orderService.listOrders(null, null, pageable);
 
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
-        verify(orderRepository).save(order);
+        assertThat(result.content()).hasSize(1);
+        assertThat(result.totalElements()).isEqualTo(1);
     }
 
     @Test
-    void cancelOrder_unknownOrder_throwsEntityNotFoundException() {
-        when(orderRepository.findByOrderNumber(ORDER_NUMBER)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> orderService.cancelOrder(ORDER_NUMBER))
-                .isInstanceOf(EntityNotFoundException.class);
-    }
-
-    @Test
-    void updateOrderStatus_createdToConfirmed_returnsUpdatedResponse() {
+    void updateOrderStatus_validTransition_savesAndPublishesEvent() {
         Order order = buildOrder(OrderStatus.CREATED, buildCustomer(UUID.randomUUID()));
         OrderResponse expected = buildResponse(order);
 
@@ -134,14 +131,38 @@ class OrderServiceTest {
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
         assertThat(result).isEqualTo(expected);
+
+        ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().getClass().getSimpleName()).isEqualTo("OrderStatusChangedEvent");
     }
 
+    @Test
+    void cancelOrder_delegatesToUpdateOrderStatus() {
+        Order order = buildOrder(OrderStatus.CREATED, buildCustomer(UUID.randomUUID()));
+
+        when(orderRepository.findByOrderNumber(ORDER_NUMBER)).thenReturn(Optional.of(order));
+        when(orderRepository.save(any(Order.class))).thenReturn(order);
+        when(orderMapper.toResponse(any())).thenReturn(buildResponse(order));
+
+        orderService.cancelOrder(ORDER_NUMBER);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        verify(eventPublisher).publishEvent(any());
+    }
+
+    @Test
+    void cancelOrder_unknownOrder_throwsEntityNotFoundException() {
+        when(orderRepository.findByOrderNumber(ORDER_NUMBER)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> orderService.cancelOrder(ORDER_NUMBER))
+                .isInstanceOf(EntityNotFoundException.class);
+    }
+
+    // ── helpers ──────────────────────────────────────────────────────────────
+
     private Customer buildCustomer(UUID id) {
-        return Customer.builder()
-                .id(id)
-                .email("test@example.com")
-                .fullName("Test User")
-                .build();
+        return Customer.builder().id(id).email("test@example.com").fullName("Test User").build();
     }
 
     private CreateOrderRequest buildRequest(UUID customerId) {

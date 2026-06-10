@@ -12,7 +12,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
@@ -52,43 +51,35 @@ public class OrderController {
     }
 
     @GetMapping("/{orderNumber}")
-    @Operation(summary = "Get order by order number")
+    @Operation(summary = "Get order by order number (items eagerly loaded)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Order found"),
             @ApiResponse(responseCode = "404", description = "Order not found")
     })
     public ResponseEntity<OrderResponse> getOrder(
-            @Parameter(description = "Order number (e.g. ORD-AB1C2D3E)")
+            @Parameter(description = "Order number, e.g. ORD-AB1C2D3E")
             @PathVariable String orderNumber) {
-        return ResponseEntity.ok(orderService.getOrderByOrderNumber(orderNumber));
+        return ResponseEntity.ok(orderService.getOrderByNumber(orderNumber));
     }
 
     @GetMapping
     @Operation(summary = "List orders with optional filters and pagination")
     @ApiResponse(responseCode = "200", description = "Paginated list of orders")
-    public ResponseEntity<PagedResponse<OrderResponse>> getOrders(
-            @Parameter(description = "Filter by order status")
-            @RequestParam(required = false) OrderStatus status,
+    public ResponseEntity<PagedResponse<OrderResponse>> listOrders(
             @Parameter(description = "Filter by customer ID")
             @RequestParam(required = false) UUID customerId,
+            @Parameter(description = "Filter by order status")
+            @RequestParam(required = false) OrderStatus status,
             @PageableDefault(size = 20) Pageable pageable) {
-        Page<OrderResponse> page = orderService.getOrders(status, customerId, pageable);
-        return ResponseEntity.ok(new PagedResponse<>(
-                page.getContent(),
-                page.getNumber(),
-                page.getSize(),
-                page.getTotalElements(),
-                page.getTotalPages()
-        ));
+        return ResponseEntity.ok(orderService.listOrders(customerId, status, pageable));
     }
 
     @PatchMapping("/{orderNumber}/status")
     @Operation(summary = "Update order status")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Status updated"),
-            @ApiResponse(responseCode = "400", description = "Invalid status"),
             @ApiResponse(responseCode = "404", description = "Order not found"),
-            @ApiResponse(responseCode = "422", description = "Invalid state transition")
+            @ApiResponse(responseCode = "409", description = "Invalid state transition")
     })
     public ResponseEntity<OrderResponse> updateOrderStatus(
             @PathVariable String orderNumber,
@@ -101,7 +92,7 @@ public class OrderController {
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Order cancelled"),
             @ApiResponse(responseCode = "404", description = "Order not found"),
-            @ApiResponse(responseCode = "422", description = "Order cannot be cancelled from its current status")
+            @ApiResponse(responseCode = "409", description = "Order cannot be cancelled from its current status")
     })
     public ResponseEntity<Void> cancelOrder(@PathVariable String orderNumber) {
         orderService.cancelOrder(orderNumber);

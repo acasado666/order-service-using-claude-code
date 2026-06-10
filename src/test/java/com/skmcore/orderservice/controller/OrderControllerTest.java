@@ -90,7 +90,7 @@ class OrderControllerTest {
         String orderNumber = "ORD-ABC12345";
         OrderResponse response = buildResponse();
 
-        when(orderService.getOrderByOrderNumber(orderNumber)).thenReturn(response);
+        when(orderService.getOrderByNumber(orderNumber)).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/orders/{orderNumber}", orderNumber))
                 .andExpect(status().isOk())
@@ -100,7 +100,7 @@ class OrderControllerTest {
     @Test
     void getOrder_unknownOrderNumber_returns404() throws Exception {
         String orderNumber = "ORD-NOTFOUND";
-        when(orderService.getOrderByOrderNumber(orderNumber))
+        when(orderService.getOrderByNumber(orderNumber))
                 .thenThrow(new EntityNotFoundException("Order", orderNumber));
 
         mockMvc.perform(get("/api/v1/orders/{orderNumber}", orderNumber))
