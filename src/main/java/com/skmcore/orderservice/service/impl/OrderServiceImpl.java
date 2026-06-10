@@ -60,7 +60,9 @@ public class OrderServiceImpl implements OrderService {
         Order saved = orderRepository.save(order);
         log.info("Order created: {}", saved.getOrderNumber());
 
-        eventPublisher.publishEvent(new OrderCreatedEvent(saved));
+        eventPublisher.publishEvent(OrderCreatedEvent.of(
+                saved.getId(), saved.getOrderNumber(),
+                saved.getCustomer().getId(), saved.getTotalAmount()));
         return orderMapper.toResponse(saved);
     }
 
@@ -99,7 +101,8 @@ public class OrderServiceImpl implements OrderService {
         order.transitionTo(newStatus);
         Order saved = orderRepository.save(order);
 
-        eventPublisher.publishEvent(new OrderStatusChangedEvent(saved, previousStatus));
+        eventPublisher.publishEvent(OrderStatusChangedEvent.of(
+                saved.getId(), saved.getOrderNumber(), previousStatus, newStatus));
         return orderMapper.toResponse(saved);
     }
 
