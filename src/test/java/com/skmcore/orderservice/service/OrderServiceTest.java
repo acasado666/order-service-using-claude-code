@@ -34,6 +34,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
 
+    private static final String ORDER_NUMBER = "ORD-ABC12345";
+
     @Mock
     private OrderRepository orderRepository;
 
@@ -77,63 +79,58 @@ class OrderServiceTest {
     }
 
     @Test
-    void getOrderById_existingId_returnsResponse() {
-        UUID id = UUID.randomUUID();
+    void getOrderByOrderNumber_existingNumber_returnsResponse() {
         Order order = buildOrder(OrderStatus.CREATED, buildCustomer(UUID.randomUUID()));
         OrderResponse expected = buildResponse(order);
 
-        when(orderRepository.findById(id)).thenReturn(Optional.of(order));
+        when(orderRepository.findByOrderNumber(ORDER_NUMBER)).thenReturn(Optional.of(order));
         when(orderMapper.toResponse(order)).thenReturn(expected);
 
-        OrderResponse result = orderService.getOrderById(id);
+        OrderResponse result = orderService.getOrderByOrderNumber(ORDER_NUMBER);
 
         assertThat(result).isEqualTo(expected);
     }
 
     @Test
-    void getOrderById_missingId_throwsEntityNotFoundException() {
-        UUID id = UUID.randomUUID();
-        when(orderRepository.findById(id)).thenReturn(Optional.empty());
+    void getOrderByOrderNumber_unknownNumber_throwsEntityNotFoundException() {
+        when(orderRepository.findByOrderNumber(ORDER_NUMBER)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> orderService.getOrderById(id))
+        assertThatThrownBy(() -> orderService.getOrderByOrderNumber(ORDER_NUMBER))
                 .isInstanceOf(EntityNotFoundException.class)
-                .hasMessageContaining(id.toString());
+                .hasMessageContaining(ORDER_NUMBER);
     }
 
     @Test
     void cancelOrder_createdOrder_setsStatusCancelled() {
-        UUID id = UUID.randomUUID();
         Order order = buildOrder(OrderStatus.CREATED, buildCustomer(UUID.randomUUID()));
 
-        when(orderRepository.findById(id)).thenReturn(Optional.of(order));
+        when(orderRepository.findByOrderNumber(ORDER_NUMBER)).thenReturn(Optional.of(order));
         when(orderRepository.save(any(Order.class))).thenReturn(order);
 
-        orderService.cancelOrder(id);
+        orderService.cancelOrder(ORDER_NUMBER);
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
         verify(orderRepository).save(order);
     }
 
     @Test
-    void cancelOrder_missingId_throwsEntityNotFoundException() {
-        UUID id = UUID.randomUUID();
-        when(orderRepository.findById(id)).thenReturn(Optional.empty());
+    void cancelOrder_unknownOrder_throwsEntityNotFoundException() {
+        when(orderRepository.findByOrderNumber(ORDER_NUMBER)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> orderService.cancelOrder(id))
+        assertThatThrownBy(() -> orderService.cancelOrder(ORDER_NUMBER))
                 .isInstanceOf(EntityNotFoundException.class);
     }
 
     @Test
     void updateOrderStatus_createdToConfirmed_returnsUpdatedResponse() {
-        UUID id = UUID.randomUUID();
         Order order = buildOrder(OrderStatus.CREATED, buildCustomer(UUID.randomUUID()));
         OrderResponse expected = buildResponse(order);
 
-        when(orderRepository.findById(id)).thenReturn(Optional.of(order));
+        when(orderRepository.findByOrderNumber(ORDER_NUMBER)).thenReturn(Optional.of(order));
         when(orderRepository.save(order)).thenReturn(order);
         when(orderMapper.toResponse(order)).thenReturn(expected);
 
-        OrderResponse result = orderService.updateOrderStatus(id, OrderStatus.CONFIRMED);
+        OrderResponse result = orderService.updateOrderStatus(ORDER_NUMBER, OrderStatus.CONFIRMED);
 
         assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
         assertThat(result).isEqualTo(expected);
@@ -158,6 +155,7 @@ class OrderServiceTest {
     private Order buildOrder(OrderStatus status, Customer customer) {
         return Order.builder()
                 .id(UUID.randomUUID())
+                .orderNumber(ORDER_NUMBER)
                 .status(status)
                 .customer(customer)
                 .totalAmount(new BigDecimal("19.98"))
@@ -169,7 +167,7 @@ class OrderServiceTest {
     private OrderResponse buildResponse(Order order) {
         return new OrderResponse(
                 order.getId(),
-                "ORD-ABC12345",
+                order.getOrderNumber(),
                 order.getStatus(),
                 order.getCustomer().getEmail(),
                 order.getCustomer().getFullName(),

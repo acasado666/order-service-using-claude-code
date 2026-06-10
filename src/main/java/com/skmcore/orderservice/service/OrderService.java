@@ -12,13 +12,11 @@ public interface OrderService {
 
     OrderResponse createOrder(CreateOrderRequest request);
 
-    OrderResponse getOrderById(UUID id);
+    OrderResponse getOrderByOrderNumber(String orderNumber);
 
-    Page<OrderResponse> getAllOrders(Pageable pageable);
+    Page<OrderResponse> getOrders(OrderStatus status, UUID customerId, Pageable pageable);
 
-    Page<OrderResponse> getOrdersByCustomer(UUID customerId, Pageable pageable);
+    OrderResponse updateOrderStatus(String orderNumber, OrderStatus newStatus);
 
-    OrderResponse updateOrderStatus(UUID id, OrderStatus newStatus);
-
-    void cancelOrder(UUID id);
+    void cancelOrder(String orderNumber);
 }

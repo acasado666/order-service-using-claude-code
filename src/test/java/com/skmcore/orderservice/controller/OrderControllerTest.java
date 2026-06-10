@@ -86,24 +86,24 @@ class OrderControllerTest {
     }
 
     @Test
-    void getOrder_existingId_returns200() throws Exception {
-        UUID id = UUID.randomUUID();
+    void getOrder_existingOrderNumber_returns200() throws Exception {
+        String orderNumber = "ORD-ABC12345";
         OrderResponse response = buildResponse();
 
-        when(orderService.getOrderById(id)).thenReturn(response);
+        when(orderService.getOrderByOrderNumber(orderNumber)).thenReturn(response);
 
-        mockMvc.perform(get("/api/v1/orders/{id}", id))
+        mockMvc.perform(get("/api/v1/orders/{orderNumber}", orderNumber))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(response.id().toString()));
     }
 
     @Test
-    void getOrder_missingId_returns404() throws Exception {
-        UUID id = UUID.randomUUID();
-        when(orderService.getOrderById(id))
-                .thenThrow(new EntityNotFoundException("Order", id.toString()));
+    void getOrder_unknownOrderNumber_returns404() throws Exception {
+        String orderNumber = "ORD-NOTFOUND";
+        when(orderService.getOrderByOrderNumber(orderNumber))
+                .thenThrow(new EntityNotFoundException("Order", orderNumber));
 
-        mockMvc.perform(get("/api/v1/orders/{id}", id))
+        mockMvc.perform(get("/api/v1/orders/{orderNumber}", orderNumber))
                 .andExpect(status().isNotFound());
     }
 

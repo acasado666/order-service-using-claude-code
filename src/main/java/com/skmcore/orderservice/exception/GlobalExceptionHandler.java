@@ -25,6 +25,14 @@ public class GlobalExceptionHandler {
                 .body(build(HttpStatus.NOT_FOUND, ex.getMessage(), request.getRequestURI(), null));
     }
 
+    @ExceptionHandler(DuplicateResourceException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicate(
+            DuplicateResourceException ex, HttpServletRequest request) {
+        log.warn("Duplicate resource: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(build(HttpStatus.CONFLICT, ex.getMessage(), request.getRequestURI(), null));
+    }
+
     @ExceptionHandler(InvalidOrderStateTransitionException.class)
     public ResponseEntity<ErrorResponse> handleInvalidStateTransition(
             InvalidOrderStateTransitionException ex, HttpServletRequest request) {

@@ -49,49 +49,53 @@ public class OrderServiceImpl implements OrderService {
         order.recalculateTotalAmount();
 
         Order saved = orderRepository.save(order);
-        log.info("Order created with id: {}", saved.getId());
+        log.info("Order created: {}", saved.getOrderNumber());
         return orderMapper.toResponse(saved);
     }
 
     @Override
     @Transactional(readOnly = true)
     @Retryable(retryFor = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 500))
-    public OrderResponse getOrderById(UUID id) {
-        return orderRepository.findById(id)
+    public OrderResponse getOrderByOrderNumber(String orderNumber) {
+        return orderRepository.findByOrderNumber(orderNumber)
                 .map(orderMapper::toResponse)
-                .orElseThrow(() -> new EntityNotFoundException("Order", id.toString()));
+                .orElseThrow(() -> new EntityNotFoundException("Order", orderNumber));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Page<OrderResponse> getAllOrders(Pageable pageable) {
-        return orderRepository.findAll(pageable).map(orderMapper::toResponse);
+    public Page<OrderResponse> getOrders(OrderStatus status, UUID customerId, Pageable pageable) {
+        Page<Order> page;
+        if (status != null && customerId != null) {
+            page = orderRepository.findByStatusAndCustomer_Id(status, customerId, pageable);
+        } else if (status != null) {
+            page = orderRepository.findByStatus(status, pageable);
+        } else if (customerId != null) {
+            page = orderRepository.findByCustomer_Id(customerId, pageable);
+        } else {
+            page = orderRepository.findAll(pageable);
+        }
+        return page.map(orderMapper::toResponse);
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public Page<OrderResponse> getOrdersByCustomer(UUID customerId, Pageable pageable) {
-        return orderRepository.findByCustomerId(customerId, pageable).map(orderMapper::toResponse);
-    }
-
-    @Override
-    public OrderResponse updateOrderStatus(UUID id, OrderStatus newStatus) {
-        log.info("Updating order {} to status {}", id, newStatus);
-        Order order = findOrThrow(id);
+    public OrderResponse updateOrderStatus(String orderNumber, OrderStatus newStatus) {
+        log.info("Updating order {} to status {}", orderNumber, newStatus);
+        Order order = findByOrderNumberOrThrow(orderNumber);
         order.transitionTo(newStatus);
         return orderMapper.toResponse(orderRepository.save(order));
     }
 
     @Override
-    public void cancelOrder(UUID id) {
-        log.info("Cancelling order: {}", id);
-        Order order = findOrThrow(id);
+    public void cancelOrder(String orderNumber) {
+        log.info("Cancelling order: {}", orderNumber);
+        Order order = findByOrderNumberOrThrow(orderNumber);
         order.transitionTo(OrderStatus.CANCELLED);
         orderRepository.save(order);
     }
 
-    private Order findOrThrow(UUID id) {
-        return orderRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Order", id.toString()));
+    private Order findByOrderNumberOrThrow(String orderNumber) {
+        return orderRepository.findByOrderNumber(orderNumber)
+                .orElseThrow(() -> new EntityNotFoundException("Order", orderNumber));
     }
 }

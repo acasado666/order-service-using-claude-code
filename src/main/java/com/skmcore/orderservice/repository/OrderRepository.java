@@ -5,19 +5,17 @@ import com.skmcore.orderservice.model.OrderStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 
-import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface OrderRepository extends JpaRepository<Order, UUID> {
 
-    Page<Order> findByCustomerId(UUID customerId, Pageable pageable);
+    Optional<Order> findByOrderNumber(String orderNumber);
 
     Page<Order> findByStatus(OrderStatus status, Pageable pageable);
 
-    @Query("SELECT o FROM Order o WHERE o.customer.id = :customerId AND o.status = :status")
-    List<Order> findByCustomerIdAndStatus(@Param("customerId") UUID customerId,
-                                          @Param("status") OrderStatus status);
+    Page<Order> findByCustomer_Id(UUID customerId, Pageable pageable);
+
+    Page<Order> findByStatusAndCustomer_Id(OrderStatus status, UUID customerId, Pageable pageable);
 }
