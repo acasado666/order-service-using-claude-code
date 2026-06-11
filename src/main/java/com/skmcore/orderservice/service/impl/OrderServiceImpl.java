@@ -1,5 +1,6 @@
 package com.skmcore.orderservice.service.impl;
 
+import java.math.BigDecimal;
 import com.skmcore.orderservice.dto.CreateOrderRequest;
 import com.skmcore.orderservice.dto.OrderResponse;
 import com.skmcore.orderservice.dto.PagedResponse;
@@ -54,7 +55,10 @@ public class OrderServiceImpl implements OrderService {
 
         Order order = orderMapper.toEntity(request);
         order.setCustomer(customer);
-        order.getItems().forEach(item -> item.setOrder(order));
+        order.getItems().forEach(item -> {
+            item.setOrder(order);
+            item.setSubtotal(item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
+        });
         order.recalculateTotalAmount();
 
         Order saved = orderRepository.save(order);
