@@ -55,6 +55,10 @@ springdoc:
     path: /swagger-ui.html
     operations-sorter: method
 
+jwt:
+  secret: order-service-jwt-dev-secret-key-change-in-prod
+  expiration: 86400000
+
 logging:
   level:
     root: INFO

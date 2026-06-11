@@ -6,6 +6,8 @@ import org.slf4j.MDC;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -69,6 +71,24 @@ public class GlobalExceptionHandler {
         withMdc(cid, () -> log.warn("Duplicate resource: {}", ex.getMessage()));
         return respond(HttpStatus.CONFLICT, cid,
                 new ErrorResponse(cid, 409, "Conflict", ex.getMessage(), LocalDateTime.now(), null));
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErrorResponse> handleAuthentication(
+            AuthenticationException ex, HttpServletRequest request) {
+        String cid = correlationId(request);
+        withMdc(cid, () -> log.warn("Authentication failed at {}: {}", request.getRequestURI(), ex.getMessage()));
+        return respond(HttpStatus.UNAUTHORIZED, cid,
+                new ErrorResponse(cid, 401, "Unauthorized", "Authentication required", LocalDateTime.now(), null));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(
+            AccessDeniedException ex, HttpServletRequest request) {
+        String cid = correlationId(request);
+        withMdc(cid, () -> log.warn("Access denied at {}: {}", request.getRequestURI(), ex.getMessage()));
+        return respond(HttpStatus.FORBIDDEN, cid,
+                new ErrorResponse(cid, 403, "Forbidden", "Access denied", LocalDateTime.now(), null));
     }
 
     @ExceptionHandler(Exception.class)

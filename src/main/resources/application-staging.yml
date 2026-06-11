@@ -18,6 +18,9 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
+jwt:
+  secret: ${JWT_SECRET:order-service-jwt-dev-secret-key-change-in-prod}
+
 logging:
   level:
     root: INFO
