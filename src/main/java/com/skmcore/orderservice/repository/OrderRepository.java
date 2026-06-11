@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,6 +21,8 @@ public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecific
     @EntityGraph(attributePaths = {"items", "customer"})
     @Query("SELECT o FROM Order o WHERE o.orderNumber = :orderNumber")
     Optional<Order> findByOrderNumberWithItems(@Param("orderNumber") String orderNumber);
+
+    long countByStatusIn(Collection<OrderStatus> statuses);
 
     Page<Order> findByStatus(OrderStatus status, Pageable pageable);
 

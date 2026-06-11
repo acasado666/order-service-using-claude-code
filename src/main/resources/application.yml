@@ -34,6 +34,19 @@ management:
     export:
       prometheus:
         enabled: true
+  info:
+    build:
+      enabled: true
+    env:
+      enabled: true
+
+info:
+  app:
+    name: '@project.name@'
+    description: '@project.description@'
+    version: '@project.version@'
+  java:
+    version: '@java.version@'
 
 springdoc:
   api-docs:

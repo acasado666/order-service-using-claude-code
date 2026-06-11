@@ -9,6 +9,7 @@ import com.skmcore.orderservice.event.OrderCreatedEvent;
 import com.skmcore.orderservice.event.OrderStatusChangedEvent;
 import com.skmcore.orderservice.exception.EntityNotFoundException;
 import com.skmcore.orderservice.mapper.OrderMapper;
+import com.skmcore.orderservice.metrics.OrderMetrics;
 import com.skmcore.orderservice.model.Customer;
 import com.skmcore.orderservice.model.Order;
 import com.skmcore.orderservice.model.OrderStatus;
@@ -52,6 +53,7 @@ class OrderServiceTest {
     @Mock private CustomerRepository customerRepository;
     @Mock private OrderMapper orderMapper;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private OrderMetrics orderMetrics;
 
     @InjectMocks
     private OrderServiceImpl orderService;

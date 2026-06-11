@@ -5,7 +5,7 @@
 
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level [${APP_NAME}] %logger{36} - %msg%n</pattern>
+            <pattern>%clr(%d{HH:mm:ss.SSS}){faint} %clr(%-5level){highlight} %clr([%t]){faint} %clr(%logger{36}){cyan}%clr(:){faint} [%X{correlationId:-}] %msg%n</pattern>
         </encoder>
     </appender>
 

@@ -1,5 +1,7 @@
 package com.skmcore.orderservice.service.impl;
 
+import com.skmcore.orderservice.metrics.OrderMetrics;
+import io.micrometer.core.instrument.Timer;
 import java.math.BigDecimal;
 import com.skmcore.orderservice.dto.CreateOrderRequest;
 import com.skmcore.orderservice.dto.OrderResponse;
@@ -36,38 +38,47 @@ public class OrderServiceImpl implements OrderService {
     private final CustomerRepository customerRepository;
     private final OrderMapper orderMapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final OrderMetrics orderMetrics;
 
     public OrderServiceImpl(OrderRepository orderRepository,
                             CustomerRepository customerRepository,
                             OrderMapper orderMapper,
-                            ApplicationEventPublisher eventPublisher) {
+                            ApplicationEventPublisher eventPublisher,
+                            OrderMetrics orderMetrics) {
         this.orderRepository = orderRepository;
         this.customerRepository = customerRepository;
         this.orderMapper = orderMapper;
         this.eventPublisher = eventPublisher;
+        this.orderMetrics = orderMetrics;
     }
 
     @Override
     public OrderResponse createOrder(CreateOrderRequest request) {
-        log.info("Creating order for customer: {}", request.customerId());
-        Customer customer = customerRepository.findById(request.customerId())
-                .orElseThrow(() -> new EntityNotFoundException("Customer", request.customerId().toString()));
+        Timer.Sample sample = orderMetrics.startCreationTimer();
+        try {
+            log.info("Creating order for customer: {}", request.customerId());
+            Customer customer = customerRepository.findById(request.customerId())
+                    .orElseThrow(() -> new EntityNotFoundException("Customer", request.customerId().toString()));
 
-        Order order = orderMapper.toEntity(request);
-        order.setCustomer(customer);
-        order.getItems().forEach(item -> {
-            item.setOrder(order);
-            item.setSubtotal(item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
-        });
-        order.recalculateTotalAmount();
+            Order order = orderMapper.toEntity(request);
+            order.setCustomer(customer);
+            order.getItems().forEach(item -> {
+                item.setOrder(order);
+                item.setSubtotal(item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
+            });
+            order.recalculateTotalAmount();
 
-        Order saved = orderRepository.save(order);
-        log.info("Order created: {}", saved.getOrderNumber());
+            Order saved = orderRepository.save(order);
+            log.info("Order created: {}", saved.getOrderNumber());
 
-        eventPublisher.publishEvent(OrderCreatedEvent.of(
-                saved.getId(), saved.getOrderNumber(),
-                saved.getCustomer().getId(), saved.getTotalAmount()));
-        return orderMapper.toResponse(saved);
+            eventPublisher.publishEvent(OrderCreatedEvent.of(
+                    saved.getId(), saved.getOrderNumber(),
+                    saved.getCustomer().getId(), saved.getTotalAmount()));
+            orderMetrics.recordOrderCreated(saved.getCustomer().getId());
+            return orderMapper.toResponse(saved);
+        } finally {
+            orderMetrics.stopCreationTimer(sample);
+        }
     }
 
     @Override
@@ -107,6 +118,7 @@ public class OrderServiceImpl implements OrderService {
 
         eventPublisher.publishEvent(OrderStatusChangedEvent.of(
                 saved.getId(), saved.getOrderNumber(), previousStatus, newStatus));
+        orderMetrics.recordStatusChanged(previousStatus, newStatus);
         return orderMapper.toResponse(saved);
     }
 
