@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  namespace: order-service
+  labels:
+    app: order-service
+    app.kubernetes.io/name: order-service
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: order-service
+  template:
+    metadata:
+      labels:
+        app: order-service
+        app.kubernetes.io/name: order-service
+    spec:
+      # Graceful shutdown: give Spring Boot time to finish in-flight requests
+      terminationGracePeriodSeconds: 60
+
+      # Pull from GHCR — create this secret with:
+      #   kubectl create secret docker-registry ghcr-pull-secret \
+      #     --docker-server=ghcr.io --docker-username=<user> \
+      #     --docker-password=<PAT> -n order-service
+      imagePullSecrets:
+        - name: ghcr-pull-secret
+
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+
+      affinity:
+        podAntiAffinity:
+          # Prefer to spread replicas across different nodes; does not hard-block scheduling
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: order-service
+
+      containers:
+        - name: order-service
+          # kustomization.yml's `images` stanza overrides this tag at deploy time
+          image: ghcr.io/your-org/order-service:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false   # Spring Boot writes temp files at runtime
+            capabilities:
+              drop: [ALL]
+
+          resources:
+            requests:
+              memory: 256Mi
+              cpu: 250m
+            limits:
+              memory: 512Mi
+              cpu: 500m
+
+          # All non-sensitive config injected from ConfigMap; secrets from Secret
+          envFrom:
+            - configMapRef:
+                name: order-service-config
+            - secretRef:
+                name: order-service-secret
+
+          # Startup probe: handles slow cold starts (Liquibase migrations, JIT warm-up).
+          # Container has up to 300 s (30 × 10) to become ready before it is killed.
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            failureThreshold: 30
+            periodSeconds: 10
+
+          # Readiness probe: gates traffic. Pod is removed from Service endpoints on failure.
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+            successThreshold: 1
+
+          # Liveness probe: restarts the container if the app deadlocks or becomes unresponsive.
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 3
+            successThreshold: 1
